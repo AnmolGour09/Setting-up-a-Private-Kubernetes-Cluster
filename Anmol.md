@@ -6,9 +6,6 @@
 
 </div>
 
-```bash
-export ZONE=
-```
 
 ```bash
 curl -LO https://raw.githubusercontent.com/AnmolGour09/Setting-up-a-Private-Kubernetes-Cluster/refs/heads/main/Anmol.sh
