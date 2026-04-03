@@ -11,6 +11,22 @@ BOLD_TEXT=$'\033[1m'
 RESET_FORMAT=$'\033[0m'
 BLUE_TEXT=$'\033[0;34m'
 
+# Spinner function
+spinner() {
+    local pid=$!
+    local delay=0.1
+    local spinstr='|/-\'
+    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"
+    done
+    printf "    \b\b\b\b"
+}
+
+# Welcome message
 echo
 echo "${BG_BLUE}${WHITE}${BOLD}=====================================================${RESET}"
 echo "${BG_BLUE}${WHITE}${BOLD}         Google cloud with Anmol Gour                                   ${RESET}"
@@ -28,7 +44,8 @@ echo "${GREEN_TEXT}Zone set to: ${ZONE}${RESET_FORMAT}"
 echo
 
 # Set the compute zone
-gcloud config set compute/zone $ZONE
+echo "${BLUE_TEXT}Setting compute zone...${RESET_FORMAT}"
+(gcloud config set compute/zone $ZONE) & spinner
 
 # Derive the region from the zone
 export REGION=${ZONE%-*}
@@ -38,11 +55,11 @@ echo "${CYAN_TEXT}This may take a few minutes.${RESET_FORMAT}"
 echo
 
 # Create a private GKE cluster
-gcloud beta container clusters create private-cluster \
+(gcloud beta container clusters create private-cluster \
     --enable-private-nodes \
     --master-ipv4-cidr 172.16.0.16/28 \
     --enable-ip-alias \
-    --create-subnetwork ""
+    --create-subnetwork "") & spinner
 
 echo
 echo "${GREEN_TEXT}Private cluster created successfully!${RESET_FORMAT}"
@@ -52,7 +69,7 @@ echo "${BLUE_TEXT}${BOLD_TEXT}Step 3: Creating a source instance...${RESET_FORMA
 echo
 
 # Create a source instance
-gcloud compute instances create source-instance --zone=$ZONE --scopes 'https://www.googleapis.com/auth/cloud-platform'
+(gcloud compute instances create source-instance --zone=$ZONE --scopes 'https://www.googleapis.com/auth/cloud-platform') & spinner
 
 # Get the NAT IP of the source instance
 NAT_IAP=$(gcloud compute instances describe source-instance --zone=$ZONE | grep natIP | awk '{print $2}')
@@ -65,9 +82,9 @@ echo "${BLUE_TEXT}${BOLD_TEXT}Step 4: Updating the private cluster to allow mast
 echo
 
 # Update the private cluster to allow master-authorized networks
-gcloud container clusters update private-cluster \
+(gcloud container clusters update private-cluster \
     --enable-master-authorized-networks \
-    --master-authorized-networks $NAT_IAP/32
+    --master-authorized-networks $NAT_IAP/32) & spinner
 
 echo
 echo "${GREEN_TEXT}Master-authorized networks updated successfully!${RESET_FORMAT}"
@@ -77,7 +94,7 @@ echo "${BLUE_TEXT}${BOLD_TEXT}Step 5: Deleting the private cluster...${RESET_FOR
 echo
 
 # Delete the private cluster
-gcloud container clusters delete private-cluster --zone=$ZONE --quiet
+(gcloud container clusters delete private-cluster --zone=$ZONE --quiet) & spinner
 
 echo
 echo "${GREEN_TEXT}Private cluster deleted successfully!${RESET_FORMAT}"
@@ -87,12 +104,12 @@ echo "${BLUE_TEXT}${BOLD_TEXT}Step 6: Creating a custom subnet...${RESET_FORMAT}
 echo
 
 # Create a custom subnet
-gcloud compute networks subnets create my-subnet \
+(gcloud compute networks subnets create my-subnet \
     --network default \
     --range 10.0.4.0/22 \
     --enable-private-ip-google-access \
     --region=$REGION \
-    --secondary-range my-svc-range=10.0.32.0/20,my-pod-range=10.4.0.0/14
+    --secondary-range my-svc-range=10.0.32.0/20,my-pod-range=10.4.0.0/14) & spinner
 
 echo
 echo "${GREEN_TEXT}Custom subnet created successfully!${RESET_FORMAT}"
@@ -102,14 +119,14 @@ echo "${BLUE_TEXT}${BOLD_TEXT}Step 7: Creating a second private GKE cluster...${
 echo
 
 # Create a second private GKE cluster
-gcloud beta container clusters create private-cluster2 \
+(gcloud beta container clusters create private-cluster2 \
     --enable-private-nodes \
     --enable-ip-alias \
     --master-ipv4-cidr 172.16.0.32/28 \
     --subnetwork my-subnet \
     --services-secondary-range-name my-svc-range \
     --cluster-secondary-range-name my-pod-range \
-    --zone=$ZONE
+    --zone=$ZONE) & spinner
 
 echo
 echo "${GREEN_TEXT}Second private cluster created successfully!${RESET_FORMAT}"
@@ -122,23 +139,13 @@ echo "${BLUE_TEXT}${BOLD_TEXT}Step 8: Updating the second private cluster to all
 echo
 
 # Update the second private cluster to allow master-authorized networks
-gcloud container clusters update private-cluster2 \
+(gcloud container clusters update private-cluster2 \
     --enable-master-authorized-networks \
     --zone=$ZONE \
-    --master-authorized-networks $NAT_IAP_Cloud/32
+    --master-authorized-networks $NAT_IAP_Cloud/32) & spinner
 
 echo
 echo "${GREEN_TEXT}Master-authorized networks updated for the second cluster!${RESET_FORMAT}"
-echo
-
-
-# Safely delete the script if it exists
-SCRIPT_NAME="arcadecrew.sh"
-if [ -f "$SCRIPT_NAME" ]; then
-    echo -e "${BOLD_TEXT}${RED_TEXT}Deleting the script ($SCRIPT_NAME) for safety purposes...${RESET_FORMAT}${NO_COLOR}"
-    rm -- "$SCRIPT_NAME"
-fi
-
 echo
 
 echo
